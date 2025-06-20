@@ -1,0 +1,92 @@
+#include <stdio.h>
+#include <string.h>
+
+// Encryption Function
+void encryptRailFence(char *text, int key, char *result) {
+    int len = strlen(text);
+    char rail[key][len];
+
+    // Fill the rail matrix with '\n'
+    for (int i = 0; i < key; i++)
+        for (int j = 0; j < len; j++)
+            rail[i][j] = '\n';
+
+    // Fill the rails in zig-zag
+    int row = 0, dir_down = 0;
+    for (int i = 0; i < len; i++) {
+        rail[row][i] = text[i];
+
+        if (row == 0 || row == key - 1)
+            dir_down = !dir_down;
+
+        row += dir_down ? 1 : -1;
+    }
+
+    // Read the rail row-by-row
+    int k = 0;
+    for (int i = 0; i < key; i++)
+        for (int j = 0; j < len; j++)
+            if (rail[i][j] != '\n')
+                result[k++] = rail[i][j];
+    result[k] = '\0';
+}
+
+// Decryption Function
+void decryptRailFence(char *cipher, int key, char *result) {
+    int len = strlen(cipher);
+    char rail[key][len];
+
+    // Fill the rail matrix with '\n'
+    for (int i = 0; i < key; i++)
+        for (int j = 0; j < len; j++)
+            rail[i][j] = '\n';
+
+    // Mark positions
+    int row = 0, dir_down = 0;
+    for (int i = 0; i < len; i++) {
+        rail[row][i] = '*';
+
+        if (row == 0 || row == key - 1)
+            dir_down = !dir_down;
+
+        row += dir_down ? 1 : -1;
+    }
+
+    // Fill the rail with cipher text
+    int k = 0;
+    for (int i = 0; i < key; i++)
+        for (int j = 0; j < len; j++)
+            if (rail[i][j] == '*' && k < len)
+                rail[i][j] = cipher[k++];
+
+    // Read in zig-zag to get original message
+    row = 0; dir_down = 0;
+    for (int i = 0; i < len; i++) {
+        result[i] = rail[row][i];
+
+        if (row == 0 || row == key - 1)
+            dir_down = !dir_down;
+
+        row += dir_down ? 1 : -1;
+    }
+    result[len] = '\0';
+}
+
+int main() {
+    char text[100], encrypted[100], decrypted[100];
+    int key;
+
+    printf("Enter the message: ");
+    scanf("%s", text);
+
+    printf("Enter the key (number of rails): ");
+    scanf("%d", &key);
+
+    encryptRailFence(text, key, encrypted);
+    printf("Encrypted: %s\n", encrypted);
+
+    decryptRailFence(encrypted, key, decrypted);
+    printf("Decrypted: %s\n", decrypted);
+
+    return 0;
+}
