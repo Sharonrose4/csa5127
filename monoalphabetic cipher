@@ -1,0 +1,41 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+// Define the substitution key: must be 26 unique letters
+// Example: A->Q, B->W, C->E, ..., Z->M
+char key[] = "QWERTYUIOPASDFGHJKLZXCVBNM";
+
+void encrypt(char *text, char *cipherText) {
+    for (int i = 0; text[i] != '\0'; i++) {
+        char ch = text[i];
+        if (isalpha(ch)) {
+            if (isupper(ch))
+                cipherText[i] = key[ch - 'A'];
+            else
+                cipherText[i] = tolower(key[ch - 'a']);
+        } else {
+            cipherText[i] = ch; // Leave non-letters unchanged
+        }
+    }
+    cipherText[strlen(text)] = '\0'; // Null-terminate the encrypted string
+}
+
+int main() {
+    char message[100];
+    char encrypted[100];
+
+    printf("Enter a message: ");
+    fgets(message, sizeof(message), stdin);
+
+    // Remove trailing newline
+    size_t len = strlen(message);
+    if (message[len - 1] == '\n') {
+        message[len - 1] = '\0';
+    }
+
+    encrypt(message, encrypted);
+    printf("Encrypted message: %s\n", encrypted);
+
+    return 0;
+}
