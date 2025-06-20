@@ -1,0 +1,63 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+// Encrypt function using Vigenère Cipher
+void encrypt(char *text, char *key, char *cipherText) {
+    int textLen = strlen(text);
+    int keyLen = strlen(key);
+    int j = 0;
+
+    for (int i = 0; i < textLen; i++) {
+        char ch = text[i];
+        if (isalpha(ch)) {
+            char base = isupper(ch) ? 'A' : 'a';
+            char k = toupper(key[j % keyLen]) - 'A';  // Get shift from key
+            cipherText[i] = ((ch - base + k) % 26) + base;
+            j++;  // Move to next letter in the key
+        } else {
+            cipherText[i] = ch; // Leave non-letters unchanged
+        }
+    }
+    cipherText[textLen] = '\0';
+}
+
+// Decrypt function using Vigenère Cipher
+void decrypt(char *cipherText, char *key, char *plainText) {
+    int textLen = strlen(cipherText);
+    int keyLen = strlen(key);
+    int j = 0;
+
+    for (int i = 0; i < textLen; i++) {
+        char ch = cipherText[i];
+        if (isalpha(ch)) {
+            char base = isupper(ch) ? 'A' : 'a';
+            char k = toupper(key[j % keyLen]) - 'A';
+            plainText[i] = ((ch - base - k + 26) % 26) + base;
+            j++;
+        } else {
+            plainText[i] = ch;
+        }
+    }
+    plainText[textLen] = '\0';
+}
+
+int main() {
+    char text[100], key[100];
+    char encrypted[100], decrypted[100];
+
+    printf("Enter the message: ");
+    fgets(text, sizeof(text), stdin);
+    text[strcspn(text, "\n")] = '\0'; // Remove newline
+
+    printf("Enter the keyword: ");
+    scanf("%s", key);
+
+    encrypt(text, key, encrypted);
+    printf("Encrypted: %s\n", encrypted);
+
+    decrypt(encrypted, key, decrypted);
+    printf("Decrypted: %s\n", decrypted);
+
+    return 0;
+}
