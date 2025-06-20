@@ -1,0 +1,53 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define SIZE 2
+
+// Function to multiply matrix and perform mod 26
+void encrypt(char *plaintext, int key[SIZE][SIZE], char *ciphertext) {
+    int i, j, k = 0;
+    int len = strlen(plaintext);
+
+    // If odd length, pad with 'X'
+    if (len % 2 != 0) {
+        plaintext[len] = 'X';
+        plaintext[len + 1] = '\0';
+        len++;
+    }
+
+    for (i = 0; i < len; i += SIZE) {
+        int vector[SIZE];
+        for (j = 0; j < SIZE; j++) {
+            vector[j] = toupper(plaintext[i + j]) - 'A';
+        }
+
+        for (j = 0; j < SIZE; j++) {
+            int sum = 0;
+            for (int l = 0; l < SIZE; l++) {
+                sum += key[j][l] * vector[l];
+            }
+            ciphertext[k++] = (sum % 26) + 'A';
+        }
+    }
+    ciphertext[k] = '\0';
+}
+
+// Example key inverse function not included; decryption needs modular inverse
+int main() {
+    char plaintext[100], ciphertext[100];
+    int key[SIZE][SIZE];
+
+    printf("Enter 2x2 key matrix (integers mod 26):\n");
+    for (int i = 0; i < SIZE; i++)
+        for (int j = 0; j < SIZE; j++)
+            scanf("%d", &key[i][j]);
+
+    printf("Enter plaintext (only letters): ");
+    scanf("%s", plaintext);
+
+    encrypt(plaintext, key, ciphertext);
+    printf("Encrypted text: %s\n", ciphertext);
+
+    return 0;
+}
