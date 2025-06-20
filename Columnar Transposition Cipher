@@ -1,0 +1,104 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+
+// Function to sort key and return the order of indices
+void getKeyOrder(const char *key, int *order) {
+    int len = strlen(key);
+    for (int i = 0; i < len; i++) {
+        order[i] = i;
+    }
+
+    // Sort based on the characters of the key
+    for (int i = 0; i < len - 1; i++) {
+        for (int j = i + 1; j < len; j++) {
+            if (key[order[i]] > key[order[j]]) {
+                int temp = order[i];
+                order[i] = order[j];
+                order[j] = temp;
+            }
+        }
+    }
+}
+
+// Encryption function
+void encrypt(char *plaintext, char *key, char *cipherText) {
+    int keyLen = strlen(key);
+    int textLen = strlen(plaintext);
+
+    // Padding with X if needed
+    int rows = (textLen + keyLen - 1) / keyLen;
+    int totalLen = rows * keyLen;
+
+    char *matrix = (char *)malloc(totalLen);
+    for (int i = 0; i < totalLen; i++) {
+        if (i < textLen) {
+            matrix[i] = plaintext[i];
+        } else {
+            matrix[i] = 'X'; // Padding
+        }
+    }
+
+    int *order = (int *)malloc(keyLen * sizeof(int));
+    getKeyOrder(key, order);
+
+    int k = 0;
+    for (int col = 0; col < keyLen; col++) {
+        int currentCol = order[col];
+        for (int row = 0; row < rows; row++) {
+            cipherText[k++] = matrix[row * keyLen + currentCol];
+        }
+    }
+
+    cipherText[k] = '\0';
+
+    free(matrix);
+    free(order);
+}
+
+// Decryption function
+void decrypt(char *cipherText, char *key, char *plainText) {
+    int keyLen = strlen(key);
+    int textLen = strlen(cipherText);
+    int rows = textLen / keyLen;
+
+    char *matrix = (char *)malloc(textLen);
+    int *order = (int *)malloc(keyLen * sizeof(int));
+    getKeyOrder(key, order);
+
+    int k = 0;
+    for (int col = 0; col < keyLen; col++) {
+        int currentCol = order[col];
+        for (int row = 0; row < rows; row++) {
+            matrix[row * keyLen + currentCol] = cipherText[k++];
+        }
+    }
+
+    for (int i = 0; i < textLen; i++) {
+        plainText[i] = matrix[i];
+    }
+    plainText[textLen] = '\0';
+
+    free(matrix);
+    free(order);
+}
+
+int main() {
+    char plaintext[100], key[20], encrypted[100], decrypted[100];
+
+    printf("Enter the plaintext: ");
+    fgets(plaintext, sizeof(plaintext), stdin);
+    plaintext[strcspn(plaintext, "\n")] = '\0'; // Remove newline
+
+    printf("Enter the key (no spaces): ");
+    scanf("%s", key);
+
+    encrypt(plaintext, key, encrypted);
+    printf("Encrypted: %s\n", encrypted);
+
+    decrypt(encrypted, key, decrypted);
+    printf("Decrypted: %s\n", decrypted);
+
+    return 0;
+}
