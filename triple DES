@@ -1,0 +1,52 @@
+#include <stdio.h>
+#include <string.h>
+
+void xorEncryptDecrypt(unsigned char *input, unsigned char *key, unsigned char *output, int len) {
+    int keyLen = strlen((char *)key);
+    for (int i = 0; i < len; i++) {
+        output[i] = input[i] ^ key[i % keyLen];
+    }
+}
+
+int main() {
+    unsigned char plaintext[100], key1[20], key2[20], key3[20];
+    unsigned char temp1[100], temp2[100], encrypted[100], decrypted[100];
+
+    printf("Enter text to encrypt: ");
+    fgets((char *)plaintext, sizeof(plaintext), stdin);
+    plaintext[strcspn((char *)plaintext, "\n")] = '\0';  // remove newline
+
+    printf("Enter key 1: ");
+    fgets((char *)key1, sizeof(key1), stdin);
+    key1[strcspn((char *)key1, "\n")] = '\0';
+
+    printf("Enter key 2: ");
+    fgets((char *)key2, sizeof(key2), stdin);
+    key2[strcspn((char *)key2, "\n")] = '\0';
+
+    printf("Enter key 3: ");
+    fgets((char *)key3, sizeof(key3), stdin);
+    key3[strcspn((char *)key3, "\n")] = '\0';
+
+    int textLen = strlen((char *)plaintext);
+
+    // Triple XOR encryption: E = E_k3(E_k2(E_k1(P)))
+    xorEncryptDecrypt(plaintext, key1, temp1, textLen);
+    xorEncryptDecrypt(temp1, key2, temp2, textLen);
+    xorEncryptDecrypt(temp2, key3, encrypted, textLen);
+
+    printf("\nEncrypted (hex): ");
+    for (int i = 0; i < textLen; i++) {
+        printf("%02X ", encrypted[i]);
+    }
+
+    // Triple XOR decryption: D = D_k1(D_k2(D_k3(C)))
+    xorEncryptDecrypt(encrypted, key3, temp2, textLen);
+    xorEncryptDecrypt(temp2, key2, temp1, textLen);
+    xorEncryptDecrypt(temp1, key1, decrypted, textLen);
+    decrypted[textLen] = '\0';  // Null-terminate the decrypted string
+
+    printf("\nDecrypted text: %s\n", decrypted);
+
+    return 0;
+}
