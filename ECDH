@@ -1,0 +1,304 @@
+import os
+import hashlib
+import hmac
+import time
+from cryptography.hazmat.primitives import hashes, serialization # type: ignore
+from cryptography.hazmat.primitives.asymmetric import ec # type: ignore
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes # type: ignore
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF # type: ignore
+from cryptography.hazmat.backends import default_backend # type: ignore
+from cryptography.exceptions import InvalidSignature # type: ignore
+import secrets
+import base64
+
+class ECDHDefenseProtocol:
+    """Enhanced ECDH implementation for defense communications"""
+    
+    def __init__(self, curve=ec.SECP384R1()):
+        """Initialize with specified elliptic curve (default: SECP384R1 for high security)"""
+        self.curve = curve
+        self.backend = default_backend()
+        self.private_key = None
+        self.public_key = None
+        self.shared_key = None
+        self.derived_keys = {}
+        
+    def generate_keypair(self):
+        """Generate ECDH key pair"""
+        print("🔐 Generating ECDH key pair...")
+        self.private_key = ec.generate_private_key(self.curve, self.backend)
+        self.public_key = self.private_key.public_key()
+        
+        # Get public key coordinates for display
+        public_numbers = self.public_key.public_numbers()
+        print(f"✅ Key pair generated successfully")
+        print(f"   Curve: {self.curve.name}")
+        print(f"   Public Key (x): {hex(public_numbers.x)[:50]}...")
+        print(f"   Public Key (y): {hex(public_numbers.y)[:50]}...")
+        return self.public_key
+    
+    def serialize_public_key(self):
+        """Serialize public key for transmission"""
+        if not self.public_key:
+            raise ValueError("No public key available. Generate keypair first.")
+        
+        return self.public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    
+    def load_peer_public_key(self, peer_public_key_pem):
+        """Load peer's public key from PEM format"""
+        return serialization.load_pem_public_key(peer_public_key_pem, self.backend)
+    
+    def perform_ecdh(self, peer_public_key):
+        """Perform ECDH key exchange and derive shared secret"""
+        if not self.private_key:
+            raise ValueError("No private key available. Generate keypair first.")
+        
+        print("🤝 Performing ECDH key exchange...")
+        
+        # Perform ECDH
+        shared_key = self.private_key.exchange(ec.ECDH(), peer_public_key)
+        
+        # Derive multiple keys using HKDF for different purposes
+        self.derive_keys(shared_key)
+        
+        print(f"✅ ECDH exchange completed")
+        print(f"   Shared secret length: {len(shared_key)} bytes")
+        print(f"   Shared secret hash: {hashlib.sha256(shared_key).hexdigest()[:32]}...")
+        
+        return shared_key
+    
+    def derive_keys(self, shared_secret):
+        """Derive multiple keys from shared secret using HKDF"""
+        print("🔑 Deriving cryptographic keys...")
+        
+        # Derive encryption key
+        hkdf_enc = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,  # 256-bit key
+            salt=b'defense_encryption_salt',
+            info=b'ECDH_Defense_Encryption_Key',
+            backend=self.backend
+        )
+        encryption_key = hkdf_enc.derive(shared_secret)
+        
+        # Derive MAC key
+        hkdf_mac = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=b'defense_mac_salt',
+            info=b'ECDH_Defense_MAC_Key',
+            backend=self.backend
+        )
+        mac_key = hkdf_mac.derive(shared_secret)
+        
+        # Derive IV generation key
+        hkdf_iv = HKDF(
+            algorithm=hashes.SHA256(),
+            length=16,
+            salt=b'defense_iv_salt',
+            info=b'ECDH_Defense_IV_Key',
+            backend=self.backend
+        )
+        iv_key = hkdf_iv.derive(shared_secret)
+        
+        self.derived_keys = {
+            'encryption': encryption_key,
+            'mac': mac_key,
+            'iv_base': iv_key
+        }
+        
+        print("✅ Key derivation completed")
+        print(f"   Encryption key: {encryption_key.hex()[:32]}...")
+        print(f"   MAC key: {mac_key.hex()[:32]}...")
+    
+    def encrypt_message(self, plaintext):
+        """Encrypt message using derived keys"""
+        if not self.derived_keys:
+            raise ValueError("No derived keys available. Perform ECDH first.")
+        
+        # Generate random IV
+        iv = secrets.token_bytes(16)
+        
+        # Encrypt using AES-256-CBC
+        cipher = Cipher(
+            algorithms.AES(self.derived_keys['encryption']),
+            modes.CBC(iv),
+            backend=self.backend
+        )
+        encryptor = cipher.encryptor()
+        
+        # Pad plaintext to block size
+        padding_length = 16 - (len(plaintext) % 16)
+        padded_plaintext = plaintext + bytes([padding_length] * padding_length)
+        
+        ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
+        
+        # Calculate HMAC for authentication
+        mac = hmac.new(
+            self.derived_keys['mac'],
+            iv + ciphertext,
+            hashlib.sha256
+        ).digest()
+        
+        encrypted_data = {
+            'iv': base64.b64encode(iv).decode(),
+            'ciphertext': base64.b64encode(ciphertext).decode(),
+            'mac': base64.b64encode(mac).decode()
+        }
+        
+        return encrypted_data
+    
+    def decrypt_message(self, encrypted_data):
+        """Decrypt and verify message"""
+        if not self.derived_keys:
+            raise ValueError("No derived keys available. Perform ECDH first.")
+        
+        # Decode base64 data
+        iv = base64.b64decode(encrypted_data['iv'])
+        ciphertext = base64.b64decode(encrypted_data['ciphertext'])
+        received_mac = base64.b64decode(encrypted_data['mac'])
+        
+        # Verify HMAC
+        expected_mac = hmac.new(
+            self.derived_keys['mac'],
+            iv + ciphertext,
+            hashlib.sha256
+        ).digest()
+        
+        if not hmac.compare_digest(received_mac, expected_mac):
+            raise ValueError("Message authentication failed - possible tampering detected!")
+        
+        # Decrypt
+        cipher = Cipher(
+            algorithms.AES(self.derived_keys['encryption']),
+            modes.CBC(iv),
+            backend=self.backend
+        )
+        decryptor = cipher.decryptor()
+        padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+        
+        # Remove padding
+        padding_length = padded_plaintext[-1]
+        plaintext = padded_plaintext[:-padding_length]
+        
+        return plaintext
+
+def demonstrate_ecdh_exchange():
+    """Demonstrate complete ECDH key exchange between two parties"""
+    print("=" * 80)
+    print("🛡️  ENHANCED ECDH KEY EXCHANGE FOR DEFENSE APPLICATIONS")
+    print("=" * 80)
+    
+    # Initialize two parties (Alice and Bob)
+    print("\n🏛️ Initializing Defense Communication Parties")
+    alice = ECDHDefenseProtocol(ec.SECP384R1())  # High security curve
+    bob = ECDHDefenseProtocol(ec.SECP384R1())
+    
+    print(f"\n👩‍💼 ALICE (Command Center)")
+    alice_public = alice.generate_keypair()
+    alice_public_pem = alice.serialize_public_key()
+    
+    print(f"\n👨‍💼 BOB (Field Unit)")
+    bob_public = bob.generate_keypair()
+    bob_public_pem = bob.serialize_public_key()
+    
+    # Exchange public keys and perform ECDH
+    print(f"\n📡 PUBLIC KEY EXCHANGE")
+    print("Alice sends public key to Bob...")
+    print("Bob sends public key to Alice...")
+    
+    alice_peer_key = alice.load_peer_public_key(bob_public_pem)
+    bob_peer_key = bob.load_peer_public_key(alice_public_pem)
+    
+    # Both parties compute shared secret
+    print(f"\n🔐 SHARED SECRET COMPUTATION")
+    alice_shared = alice.perform_ecdh(alice_peer_key)
+    bob_shared = bob.perform_ecdh(bob_peer_key)
+    
+    # Verify both parties have same shared secret
+    alice_hash = hashlib.sha256(alice_shared).hexdigest()
+    bob_hash = hashlib.sha256(bob_shared).hexdigest()
+    
+    if alice_hash == bob_hash:
+        print("✅ SUCCESS: Both parties computed identical shared secret!")
+        print(f"   Shared secret hash: {alice_hash[:32]}...")
+    else:
+        print("❌ FAILURE: Shared secrets don't match!")
+        return
+    
+    # Demonstrate secure messaging
+    print(f"\n📨 SECURE MESSAGING DEMONSTRATION")
+    
+    # Alice encrypts a classified message
+    classified_message = b"OPERATION NIGHTFALL: Rendezvous at coordinates 34.0522N 118.2437W at 0300 hours. Authentication code: DELTA-7-ECHO"
+    print(f"📤 Alice encrypts classified message:")
+    print(f"   Original: {classified_message.decode()}")
+    
+    encrypted_msg = alice.encrypt_message(classified_message)
+    print(f"   Encrypted: {encrypted_msg['ciphertext'][:50]}...")
+    print(f"   MAC: {encrypted_msg['mac'][:32]}...")
+    
+    # Bob receives and decrypts
+    print(f"\n📥 Bob receives and decrypts message:")
+    try:
+        decrypted_msg = bob.decrypt_message(encrypted_msg)
+        print(f"   Decrypted: {decrypted_msg.decode()}")
+        print("✅ Message integrity verified - authentication successful!")
+    except ValueError as e:
+        print(f"❌ Decryption failed: {e}")
+    
+    # Demonstrate tampering detection
+    print(f"\n🔒 TAMPERING DETECTION TEST")
+    print("Simulating message tampering...")
+    
+    # Modify the ciphertext
+    tampered_msg = encrypted_msg.copy()
+    tampered_ciphertext = base64.b64decode(tampered_msg['ciphertext'])
+    tampered_ciphertext = tampered_ciphertext[:-1] + b'\x00'  # Modify last byte
+    tampered_msg['ciphertext'] = base64.b64encode(tampered_ciphertext).decode()
+    
+    try:
+        bob.decrypt_message(tampered_msg)
+        print("❌ Tampering not detected - security failure!")
+    except ValueError as e:
+        print(f"✅ Tampering detected: {e}")
+    
+    # Performance metrics
+    print(f"\n📊 PERFORMANCE METRICS")
+    start_time = time.time()
+    for _ in range(100):
+        test_msg = b"Performance test message"
+        encrypted = alice.encrypt_message(test_msg)
+        decrypted = bob.decrypt_message(encrypted)
+    end_time = time.time()
+    
+    avg_time = (end_time - start_time) / 100
+    print(f"   Average encrypt/decrypt time: {avg_time*1000:.2f} ms")
+    print(f"   Throughput: {len(test_msg)/avg_time:.0f} bytes/second")
+    
+    print(f"\n🛡️ SECURITY FEATURES SUMMARY")
+    print("✅ ECDH key exchange with SECP384R1 (384-bit security)")
+    print("✅ HKDF key derivation for multiple purposes")
+    print("✅ AES-256-CBC encryption")
+    print("✅ HMAC-SHA256 message authentication")
+    print("✅ Secure random IV generation")
+    print("✅ Tampering detection and prevention")
+    print("✅ Forward secrecy (ephemeral keys)")
+
+if __name__ == "__main__":
+    # Install required packages message
+    print("Required packages: pip install cryptography")
+    print("=" * 50)
+    
+    try:
+        demonstrate_ecdh_exchange()
+    except ImportError as e:
+        print(f"❌ Missing dependency: {e}")
+        print("Please install required packages: pip install cryptography")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
