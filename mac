@@ -1,0 +1,28 @@
+#include <stdio.h>
+#include <string.h>
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
+
+int main() {
+    // Message and key
+    const char *key = "secretkey123";
+    const char *message = "Authenticate this message.";
+
+    // Output buffer for MAC
+    unsigned char mac[EVP_MAX_MD_SIZE];
+    unsigned int mac_len;
+
+    // HMAC using SHA256
+    HMAC(EVP_sha256(),
+         key, strlen(key),
+         (unsigned char*)message, strlen(message),
+         mac, &mac_len);
+
+    // Print MAC in hex
+    printf("🔐 HMAC-SHA256: ");
+    for (unsigned int i = 0; i < mac_len; i++)
+        printf("%02x", mac[i]);
+    printf("\n");
+
+    return 0;
+}
