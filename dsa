@@ -1,0 +1,55 @@
+#include <stdio.h>
+#include <string.h>
+#include <openssl/dsa.h>
+#include <openssl/sha.h>
+#include <openssl/err.h>
+
+void handleErrors() {
+    ERR_print_errors_fp(stderr);
+    abort();
+}
+
+int main() {
+    // Load OpenSSL error strings
+    ERR_load_crypto_strings();
+
+    // 1. Generate DSA Parameters and Keys
+    DSA *dsa = DSA_new();
+    if (!DSA_generate_parameters_ex(dsa, 1024, NULL, 0, NULL, NULL, NULL))
+        handleErrors();
+
+    if (!DSA_generate_key(dsa))
+        handleErrors();
+
+    // 2. Message to Sign
+    const char *message = "This message is from defense HQ";
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+
+    // Hash the message
+    SHA256((unsigned char *)message, strlen(message), hash);
+
+    // 3. Sign the hash
+    unsigned char signature[DSA_size(dsa)];
+    unsigned int sig_len;
+
+    if (!DSA_sign(0, hash, SHA256_DIGEST_LENGTH, signature, &sig_len, dsa))
+        handleErrors();
+
+    printf("✅ Message signed successfully.\n");
+
+    // 4. Verify the signature
+    int verify_status = DSA_verify(0, hash, SHA256_DIGEST_LENGTH, signature, sig_len, dsa);
+
+    if (verify_status == 1)
+        printf("🔏 Signature verified: VALID ✅\n");
+    else if (verify_status == 0)
+        printf("❌ Signature invalid!\n");
+    else
+        handleErrors(); // error occurred
+
+    // Cleanup
+    DSA_free(dsa);
+    ERR_free_strings();
+
+    return 0;
+}
