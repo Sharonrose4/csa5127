@@ -1,0 +1,58 @@
+#include <stdio.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
+#include <string.h>
+
+void handleErrors() {
+    ERR_print_errors_fp(stderr);
+    abort();
+}
+
+int main() {
+    ERR_load_crypto_strings();
+    OpenSSL_add_all_algorithms();
+
+    // 1. Choose the curve: NIST P-256
+    int nid = NID_X9_62_prime256v1;
+    EC_KEY *alice_key = EC_KEY_new_by_curve_name(nid);
+    EC_KEY *bob_key = EC_KEY_new_by_curve_name(nid);
+
+    if (!EC_KEY_generate_key(alice_key) || !EC_KEY_generate_key(bob_key))
+        handleErrors();
+
+    printf("✅ EC key pairs generated for Alice and Bob.\n");
+
+    // 2. Get public keys
+    const EC_POINT *bob_pub = EC_KEY_get0_public_key(bob_key);
+    const EC_POINT *alice_pub = EC_KEY_get0_public_key(alice_key);
+
+    // 3. Derive shared secrets (ECDH)
+    unsigned char shared_secret_alice[32];
+    unsigned char shared_secret_bob[32];
+
+    int len1 = ECDH_compute_key(shared_secret_alice, sizeof(shared_secret_alice),
+                                bob_pub, alice_key, NULL);
+
+    int len2 = ECDH_compute_key(shared_secret_bob, sizeof(shared_secret_bob),
+                                alice_pub, bob_key, NULL);
+
+    if (len1 != len2 || memcmp(shared_secret_alice, shared_secret_bob, len1) != 0)
+        handleErrors();
+
+    printf("🔐 Shared ECC secret (ECDH) established successfully.\n");
+
+    // Print shared key
+    printf("Shared Key: ");
+    for (int i = 0; i < len1; i++)
+        printf("%02X", shared_secret_alice[i]);
+    printf("\n");
+
+    // Cleanup
+    EC_KEY_free(alice_key);
+    EC_KEY_free(bob_key);
+    EVP_cleanup();
+    ERR_free_strings();
+
+    return 0;
+}
