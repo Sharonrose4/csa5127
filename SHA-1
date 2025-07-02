@@ -1,0 +1,22 @@
+#include <stdio.h>
+#include <string.h>
+#include <openssl/sha.h>
+
+int main() {
+    // Input message
+    const char *message = "Secure Defense Message";
+
+    // Buffer to hold SHA-1 hash (20 bytes)
+    unsigned char hash[SHA_DIGEST_LENGTH];
+
+    // Compute SHA-1 hash
+    SHA1((unsigned char *)message, strlen(message), hash);
+
+    // Print hash in hexadecimal
+    printf("🔐 SHA-1 Hash: ");
+    for (int i = 0; i < SHA_DIGEST_LENGTH; i++)
+        printf("%02x", hash[i]);
+    printf("\n");
+
+    return 0;
+}
